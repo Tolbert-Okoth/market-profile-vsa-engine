@@ -105,7 +105,7 @@ def test_auction_backtester_execution(sample_session_df):
     strategy = DaltonAuctionStrategy()
     data_with_signals = strategy.generate_auction_signals(df_3days)
 
-    backtester = AuctionBacktester(BacktestConfig(fixed_lots=0.10))
+    backtester = AuctionBacktester(BacktestConfig(initial_capital=10000.0, fixed_lots=0.10))
     res = backtester.run_backtest(data_with_signals)
 
     assert "metrics" in res

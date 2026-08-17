@@ -19,17 +19,22 @@ logger = logging.getLogger("AuctionBacktester")
 
 @dataclass
 class BacktestConfig:
-    """Configuration parameters for Auction Backtester."""
-    initial_capital: float = 10000.0    # Initial account capital in USD
-    contract_size: float = 100.0        # XAUUSD 1 lot = 100 oz
-    point_value: float = 0.01           # 1 MT5 spread point = $0.01 in Gold
-    slippage_y_coef: float = 0.50       # Bouchaud non-linear slippage coefficient
-    tp_atr_mult: float = 5.0            # Take profit multiplier in ATR units
-    sl_atr_mult: float = 2.8            # Stop loss multiplier in ATR units
-    ema_trailing_period: int = 50       # Trailing EMA period evaluated at candle close
-    max_holding_bars: int = 20          # Max holding duration (20 M5 bars = 1.6 hours)
-    fixed_lots: Optional[float] = 0.10  # If set, use fixed lot sizing (e.g. 0.10 lots)
-    kelly_fraction: float = 0.40        # Fractional Kelly sizing multiplier (Half-Kelly)
+    """Microstructure Backtester Configuration."""
+    initial_capital: float = 100.0          # Initial balance in USD
+    fixed_lots: Optional[float] = 0.01      # None for dynamic Kelly sizing
+    risk_per_trade: float = 0.02            # 2% risk if fixed sizing not used
+    kelly_fraction: float = 0.40            # Half-Kelly multiplier (0.4x)
+    tp_atr_mult: float = 4.5                # Take-profit multiplier (ATR)
+    sl_atr_mult: float = 2.2                # Stop-loss multiplier (ATR)
+    max_holding_bars: int = 24              # Max M5 holding bars (2 hours)
+    ema_trailing_period: int = 50           # Trailing 50-EMA period evaluated at candle close
+    contract_size: float = 100.0            # XAUUSD 1 lot = 100 oz
+    point_value: float = 0.01               # 1 MT5 spread point = $0.01 in Gold
+    slippage_y_coef: float = 0.50           # Bouchaud non-linear slippage coefficient
+    bouchaud_gamma: float = 0.314           # Square-root impact coefficient
+    daily_loss_limit_pct: float = 0.05      # 5% daily circuit breaker
+    point_value_per_lot: float = 100.0      # MT5 XAUUSD: 1 lot = $100 per $1.00 move
+    enable_trailing_stop: bool = True       # Trailing 50-EMA stop
     atr_period: int = 14
 
 
