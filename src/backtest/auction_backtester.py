@@ -222,6 +222,8 @@ class AuctionBacktester:
     def _calculate_metrics(self, trades: List[Dict], equity_curve: List[float], final_capital: float) -> Dict:
         if not trades:
             return {
+                "initial_capital": self.cfg.initial_capital,
+                "final_capital": final_capital,
                 "total_trades": 0,
                 "winning_trades": 0,
                 "losing_trades": 0,

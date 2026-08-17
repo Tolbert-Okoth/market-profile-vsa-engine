@@ -97,56 +97,61 @@ class DaltonAuctionStrategy:
         
         valid_context = in_session & spread_ok & ~data["prev_vah"].isna() & ~data["prev_val"].isna()
 
-        # 4. Acceptance into Prior Value Area Tracker (Dalton 80% Rule)
-        # Check consecutive closes inside [prev_val, prev_vah]
+        # 4. Structural Rejection Wick / Excess Confirmation (Dalton Single-Print Tail Logic)
+        # When probing outside VAL/VAH, responsive participants reject price leaving a rejection tail / wick
+        open_p = data["open"]
+        high_p = data["high"]
+        low_p = data["low"]
+        close_p = data["close"]
+        vol_p = data["tick_volume"] if "tick_volume" in data.columns else data["volume"]
+
+        bar_range = np.maximum(high_p - low_p, 1e-4)
+        lower_wick = np.minimum(open_p, close_p) - low_p
+        upper_wick = high_p - np.maximum(open_p, close_p)
+        lower_wick_ratio = lower_wick / bar_range
+        upper_wick_ratio = upper_wick / bar_range
+
+        # Rejection tail: Lower wick >= 30% on recent probe below VAL (Buyer absorption)
+        had_lower_rejection = (low_p.rolling(8).min() < data["prev_val"]) & (lower_wick_ratio.rolling(8).max() >= 0.30)
+        # Rejection tail: Upper wick >= 30% on recent probe above VAH (Seller absorption)
+        had_upper_rejection = (high_p.rolling(8).max() > data["prev_vah"]) & (upper_wick_ratio.rolling(8).max() >= 0.30)
+
+        vol_sma = vol_p.rolling(window=20, min_periods=5).mean()
+        vol_exhaustion = (vol_p < vol_sma * 1.35) | (lower_wick_ratio >= 0.30) | (upper_wick_ratio >= 0.30)
+
+        # 5. Acceptance into Prior Value Area Tracker (Dalton 80% Rule)
         inside_va = (data["close"] >= data["prev_val"]) & (data["close"] <= data["prev_vah"])
-        
-        # Rolling count of consecutive bars inside Value Area
         va_consec_inside = inside_va.groupby((~inside_va).cumsum()).cumsum()
-        
-        # Value Area acceptance achieved when consecutive bars inside >= acceptance_bars
         va_accepted = (va_consec_inside >= self.params.acceptance_bars)
         va_width = data["prev_vah"] - data["prev_val"]
         va_width_valid = (va_width >= self.params.min_va_width)
 
-        # Prior day High / Low penetration before acceptance
-        # Accepted from below (probed below VAL, now accepted inside -> Long rotation to VAH)
-        entered_from_below = (data["low"].shift(self.params.acceptance_bars) < data["prev_val"].shift(self.params.acceptance_bars)) & va_accepted & va_width_valid
-        
-        # Accepted from above (probed above VAH, now accepted inside -> Short rotation to VAL)
-        entered_from_above = (data["high"].shift(self.params.acceptance_bars) > data["prev_vah"].shift(self.params.acceptance_bars)) & va_accepted & va_width_valid
+        # 6. Point of Control (POC) Center of Reversal & Target Room Validation
+        # Long from VAL: Ensure sufficient distance to POC (POC is primary target/resistance)
+        dist_to_poc = data["prev_poc"] - data["close"]
+        # Short from VAH: Ensure sufficient distance to POC
+        dist_from_poc = data["close"] - data["prev_poc"]
 
-        # 5. Initial Balance (IB) Breakout Tracker
-        # Post-IB execution (bars 12+ of the day)
+        long_poc_room = (dist_to_poc >= 1.2 * data["atr"]) & (data["close"] < (data["prev_poc"] - 0.40))
+        short_poc_room = (dist_from_poc >= 1.2 * data["atr"]) & (data["close"] > (data["prev_poc"] + 0.40))
+
+        # 7. Initial Balance (IB) Breakout Tracker
         ib_active = data["is_ib_complete"] & (data["curr_ibr"] >= self.params.min_ibr) & (data["curr_ibr"] <= self.params.max_ibr)
-        
         ib_breakout_high = ib_active & (data["close"] > data["curr_ibh"] + self.params.ib_breakout_buffer) & macro_bull
         ib_breakout_low = ib_active & (data["close"] < data["curr_ibl"] - self.params.ib_breakout_buffer) & macro_bear
 
-        # 6. Poor Extreme Auction Incompletion (Repair Trades)
-        # Price approaches prior poor high -> high probability of auction completion/breakout
-        poor_high_target = data["prev_poor_high"] & (data["high"] >= data["prev_high"] - 1.0) & macro_bull
-        poor_low_target = data["prev_poor_low"] & (data["low"] <= data["prev_low"] + 1.0) & macro_bear
-
-        # 7. Generate Directional Signals
+        # 8. Generate Directional Signals
         trade_signals = np.zeros(len(data))
-        strategy_types = ["NONE"] * len(data)
-        custom_tp = np.full(len(data), np.nan)
-        custom_sl = np.full(len(data), np.nan)
 
-        # Strategy 1: Dalton 80% Rule Rotation Trades
-        # Long: Accepted from below VAL -> Target VAH
-        long_80_rule = valid_context & entered_from_below & (data["close"] < (data["prev_vah"] - 1.0))
-        # Short: Accepted from above VAH -> Target VAL
-        short_80_rule = valid_context & entered_from_above & (data["close"] > (data["prev_val"] + 1.0))
+        # Strategy 1: Dalton 80% Rule Rotations with Structural Rejection & POC Target Room
+        long_80_rule = valid_context & va_accepted & had_lower_rejection & long_poc_room & macro_bull & vol_exhaustion
+        short_80_rule = valid_context & va_accepted & had_upper_rejection & short_poc_room & macro_bear & vol_exhaustion
 
         trade_signals[long_80_rule] = 1.0
         trade_signals[short_80_rule] = -1.0
 
         # Strategy 2: Initial Balance Initiative Breakout Trades
-        # Long: IB High Breakout
         long_ib_break = valid_context & ib_breakout_high & (trade_signals == 0)
-        # Short: IB Low Breakout
         short_ib_break = valid_context & ib_breakout_low & (trade_signals == 0)
 
         trade_signals[long_ib_break] = 1.0
