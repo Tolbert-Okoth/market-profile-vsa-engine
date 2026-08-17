@@ -36,3 +36,9 @@
 - **No Surface-Level Sampling or Cherry-Picking**: When reading, analyzing, or adapting methodologies from research papers, preprints, specifications, and PDFs in `data/`, do NOT take superficial snippets, isolated formulas, or partial notes without synthesizing the full context of the paper.
 - **Full Theoretical & Mathematical Fidelity**: Ingest and implement the full mathematical framework—including all boundary conditions, microstructure noise filters, calibration algorithms, cost-drag models, execution constraints, and edge-case handling.
 - **Go Deep and Finish**: Never stop halfway or substitute a complex derivation with a simplified heuristic. Trace every equation to its fundamental implementation, ensure full parameter convergence, and complete the full end-to-end quantitative pipeline.
+
+---
+
+### RULE 5: NEVER PUSH TO GITHUB WITHOUT EXPLICIT USER APPROVAL
+- **No Autonomous Git Pushes**: Never run `git push` or publish code to GitHub or any remote repository automatically.
+- **Explicit Confirmation Required**: All commits remain local until the user explicitly reviews, confirms, and directs a push to a specific remote branch.
